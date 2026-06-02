@@ -11,6 +11,9 @@ on:
 jobs:
   mirror:
     runs-on: ubuntu-latest
+    concurrency:
+      group: codeberg-mirror
+      cancel-in-progress: true
     steps:
       - name: Set up SSH key
         run: |
