@@ -66,7 +66,7 @@ plugins:
       links_attr_map:
         target: _blank
   - drawio:
-      viewer_js: "/js/viewer-static.min.js"
+      viewer_js: "js/viewer-static.min.js"
       edit: false
       darkmode: false
 markdown_extensions:
