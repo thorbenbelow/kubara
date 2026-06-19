@@ -350,6 +350,11 @@ func TestConfigStore_Validate(t *testing.T) {
 	invalidConfigEnumMismatch := deepCopyConfig(validConfig)
 	invalidConfigEnumMismatch.Clusters[0].Type = "invalid-type"
 
+	invalidConfigProviderEnumMismatch := deepCopyConfig(validConfig)
+	clonedTerraformProvider := *invalidConfigProviderEnumMismatch.Clusters[0].Terraform
+	clonedTerraformProvider.Provider = TerraformProvider("unknown")
+	invalidConfigProviderEnumMismatch.Clusters[0].Terraform = &clonedTerraformProvider
+
 	// Test format validation (email)
 	invalidConfigFormatMismatch := deepCopyConfig(validConfig)
 	clonedTerraform := *invalidConfigFormatMismatch.Clusters[0].Terraform
@@ -405,6 +410,11 @@ func TestConfigStore_Validate(t *testing.T) {
 		{
 			name:    "invalid_config_should_fail_on_enum_mismatch",
 			config:  invalidConfigEnumMismatch,
+			wantErr: true,
+		},
+		{
+			name:    "invalid_config_should_fail_on_provider_enum_mismatch",
+			config:  invalidConfigProviderEnumMismatch,
 			wantErr: true,
 		},
 		{
@@ -637,6 +647,44 @@ func TestGenerateSchema(t *testing.T) {
 	}
 }
 
+func TestGenerateSchema_TerraformProviderNoneAllowsMissingTerraformDetails(t *testing.T) {
+	schemaDoc, err := GenerateSchemaWithCatalog(catalog.LoadOptions{})
+	require.NoError(t, err)
+
+	const schemaURL = "mem://config.schema.json"
+	c := schemaValidator.NewCompiler()
+	c.AssertFormat()
+	require.NoError(t, c.AddResource(schemaURL, schemaDoc))
+
+	compiled, err := c.Compile(schemaURL)
+	require.NoError(t, err)
+
+	validNoneConfig := configInstance(t, newValidTestConfig())
+	cluster := validNoneConfig["clusters"].([]any)[0].(map[string]any)
+	cluster["terraform"] = map[string]any{
+		"provider": "none",
+	}
+	assert.NoError(t, compiled.Validate(validNoneConfig))
+
+	invalidStackitConfig := configInstance(t, newValidTestConfig())
+	cluster = invalidStackitConfig["clusters"].([]any)[0].(map[string]any)
+	cluster["terraform"] = map[string]any{
+		"provider": "stackit",
+	}
+	assert.Error(t, compiled.Validate(invalidStackitConfig))
+}
+
+func configInstance(t *testing.T, cfg *Config) map[string]any {
+	t.Helper()
+
+	data, err := json.Marshal(cfg)
+	require.NoError(t, err)
+
+	var instance map[string]any
+	require.NoError(t, json.Unmarshal(data, &instance))
+	return instance
+}
+
 func TestGenerateSchema_ComposesCatalogServiceKeys(t *testing.T) {
 	schemaDoc, err := GenerateSchemaWithCatalog(catalog.LoadOptions{})
 	require.NoError(t, err)
@@ -703,4 +751,31 @@ clusters:
 	assert.Equal(t, "traefik", c.IngressClassName, "IngressClassName should be defaulted")
 
 	assert.NoError(t, cs.validate(), "Validate should pass after defaults are applied")
+}
+
+func TestLoadAndValidate_TerraformProviderNoneDisablesTerraform(t *testing.T) {
+	configYAML := `
+clusters:
+  - name: helm-only-cluster
+    dnsName: helm-only.example.com
+    terraform:
+      provider: none
+    argocd:
+      repo:
+        https:
+          customer:
+            url: "https://github.com/customer/repo.git"
+          managed:
+            url: "https://github.com/managed/repo.git"
+`
+
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(configYAML), 0644))
+
+	cs := NewConfigStoreWithCatalog(configPath, catalog.LoadOptions{})
+	require.NoError(t, cs.Load())
+
+	require.Len(t, cs.GetConfig().Clusters, 1)
+	assert.Nil(t, cs.GetConfig().Clusters[0].Terraform)
 }
