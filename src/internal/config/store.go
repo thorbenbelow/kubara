@@ -70,7 +70,7 @@ func (cs *ConfigStore) Load() error {
 
 	applyDefaults(cs.config)
 	normalizeDisabledTerraform(cs.config)
-	if err := cs.applyServiceCatalogDefaults(); err != nil {
+	if err := cs.ApplyServiceCatalogDefaults(); err != nil {
 		return fmt.Errorf("apply service catalog defaults: %w", err)
 	}
 
@@ -348,7 +348,6 @@ func buildServicesSchema(cat catalog.Catalog) (map[string]any, error) {
 	sort.Strings(keys)
 
 	serviceProperties := make(map[string]any, len(keys))
-	required := make([]any, 0, len(keys))
 	for _, serviceName := range keys {
 		definition := cat.Services[serviceName]
 		instanceSchema, err := buildServiceInstanceSchema(definition)
@@ -356,7 +355,6 @@ func buildServicesSchema(cat catalog.Catalog) (map[string]any, error) {
 			return nil, fmt.Errorf("build schema for service %q: %w", serviceName, err)
 		}
 		serviceProperties[serviceName] = instanceSchema
-		required = append(required, serviceName)
 	}
 
 	return map[string]any{
@@ -365,7 +363,6 @@ func buildServicesSchema(cat catalog.Catalog) (map[string]any, error) {
 		"description":          "Configuration for deployed services.",
 		"additionalProperties": false,
 		"properties":           serviceProperties,
-		"required":             required,
 	}, nil
 }
 
@@ -427,7 +424,7 @@ func buildServiceNetworkingSchema() map[string]any {
 	}
 }
 
-func (cs *ConfigStore) applyServiceCatalogDefaults() error {
+func (cs *ConfigStore) ApplyServiceCatalogDefaults() error {
 	cat, err := cs.GetCatalog()
 	if err != nil {
 		return err
@@ -439,6 +436,10 @@ func (cs *ConfigStore) applyServiceCatalogDefaults() error {
 		}
 
 		for name, def := range cat.Services {
+			if len(def.Spec.ClusterTypes) > 0 && !slices.Contains(def.Spec.ClusterTypes, cluster.Type) {
+				continue
+			}
+
 			existing, exists := cluster.Services[name]
 			if !exists {
 				cfg, err := applySchemaDefaults(def.Spec.ConfigSchema, map[string]any{})

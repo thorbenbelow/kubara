@@ -11,6 +11,11 @@ const (
 	ConfigVersionV1Alpha2 = "v1alpha2"
 )
 
+const (
+	Hub   string = "hub"
+	Spoke string = "spoke"
+)
+
 // TerraformProvider identifies an infrastructure provider with embedded Terraform templates.
 type TerraformProvider string
 
