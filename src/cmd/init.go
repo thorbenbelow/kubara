@@ -53,7 +53,7 @@ func NewInitCmd() *cli.Command {
 		Name:        "init",
 		Usage:       "Initialize kubara config for your GitOps repository",
 		UsageText:   "kubara init [--prep] [--local]",
-		Description: "Initializes the kubara configuration for your GitOps repository, including environment variables and catalog options. By default, it creates a config file if it does not exist. With --prep, it only generates the .env template for manual configuration. With --local, it pre-fills local-evaluation defaults in .env and writes a local-only cluster profile in config.yaml.",
+		Description: "Initializes the kubara configuration for your GitOps repository, including environment variables and catalog options. By default, it creates a config file if it does not exist. With --prep, it only generates the .env template for manual configuration. Combined with --local, --prep pre-fills local-evaluation defaults in .env and init writes a local-only cluster profile in config.yaml.",
 		Action: func(c context.Context, cmd *cli.Command) error {
 			o, _ := flags.ToOptions(cmd)
 			return o.Run()
@@ -135,7 +135,9 @@ func (o *InitOptions) Run() error {
 	configLoadErr := cs.Load()
 	var envValidateErr error
 	if o.local {
-		localmode.PopulateInitEnv(es.GetConfig())
+		if o.copyPrepFolder {
+			localmode.PopulateInitEnv(es.GetConfig())
+		}
 		envValidateErr = es.Validate()
 	} else {
 		envValidateErr = es.Validate()
@@ -219,12 +221,6 @@ func (o *InitOptions) runPrepMode(es *envconfig.EnvStore) error {
 }
 
 func (o *InitOptions) runForceMode(es *envconfig.EnvStore, cs *config.ConfigStore, envValidateErr, configLoadErr error) error {
-	if o.local {
-		if err := o.ensureLocalDotEnv(es); err != nil {
-			return err
-		}
-	}
-
 	if envValidateErr != nil {
 		return fmt.Errorf("validate env: %w", envValidateErr)
 	}
@@ -263,12 +259,6 @@ func (o *InitOptions) runForceMode(es *envconfig.EnvStore, cs *config.ConfigStor
 }
 
 func (o *InitOptions) runNormalMode(es *envconfig.EnvStore, cs *config.ConfigStore, envValidateErr error) error {
-	if o.local {
-		if err := o.ensureLocalDotEnv(es); err != nil {
-			return err
-		}
-	}
-
 	fileExists, err := utils.FileExist(cs.GetFilepath())
 	if err != nil {
 		return err
