@@ -31,6 +31,27 @@ func TestDocsRef(t *testing.T) {
 	}
 }
 
+func TestDocsVersion(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		want    string
+	}{
+		{name: "release tag with v prefix", version: "v0.11.0", want: "v0.11.0"},
+		{name: "release tag without v prefix", version: "0.11.0", want: "v0.11.0"},
+		{name: "empty maps to latest-dev", version: "", want: "latest-dev"},
+		{name: "dev maps to latest-dev", version: "dev", want: "latest-dev"},
+		{name: "pre-release maps to latest-dev", version: "v1.2.3-rc1", want: "latest-dev"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DocsVersion(tt.version); got != tt.want {
+				t.Errorf("DocsVersion(%q) = %q, want %q", tt.version, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRenderPinsVersion(t *testing.T) {
 	rendered, err := Render("v0.10.0")
 	if err != nil {
@@ -38,28 +59,37 @@ func TestRenderPinsVersion(t *testing.T) {
 	}
 	content := string(rendered)
 
-	if !strings.Contains(content, "raw.githubusercontent.com/kubara-io/kubara/v0.10.0/docs/content/") {
-		t.Errorf("AGENTS.md does not pin raw links to the version tag:\n%s", content)
+	// Curated links point at this version's published Markdown on the docs site.
+	if !strings.Contains(content, "https://docs.kubara.io/v0.10.0/1_getting_started/prerequisites/index.md") {
+		t.Errorf("AGENTS.md does not link curated docs at the version's hosted path:\n%s", content)
+	}
+	// The docs index pointer must target this version's hosted llms.txt.
+	if !strings.Contains(content, "https://docs.kubara.io/v0.10.0/llms.txt") {
+		t.Errorf("AGENTS.md does not link the version's llms.txt index:\n%s", content)
 	}
 	if !strings.Contains(content, "v0.10.0") {
 		t.Errorf("AGENTS.md does not mention the installed version")
 	}
 }
 
-func TestRenderDevFallsBackToMain(t *testing.T) {
+func TestRenderDevUsesLatestDevDocs(t *testing.T) {
 	rendered, err := Render("dev")
 	if err != nil {
 		t.Fatalf("Render returned error: %v", err)
 	}
-	if !strings.Contains(string(rendered), "raw.githubusercontent.com/kubara-io/kubara/main/docs/content/") {
-		t.Errorf("dev build should pin raw links to main:\n%s", rendered)
+	content := string(rendered)
+
+	// Dev/snapshot builds have no published version; docs links use the
+	// latest-dev alias ("main" is a git ref, not a published docs version).
+	if !strings.Contains(content, "https://docs.kubara.io/latest-dev/1_getting_started/prerequisites/index.md") {
+		t.Errorf("dev build should link curated docs at latest-dev:\n%s", content)
 	}
-	// The "pinned to" heading must reflect the resolved ref, not the display version.
-	if strings.Contains(string(rendered), "pinned to `dev`") {
-		t.Errorf("doc heading should pin to the resolved ref (main), not the display version 'dev'")
+	if !strings.Contains(content, "https://docs.kubara.io/latest-dev/llms.txt") {
+		t.Errorf("dev build should link the latest-dev llms.txt index:\n%s", content)
 	}
-	if !strings.Contains(string(rendered), "pinned to `main`") {
-		t.Errorf("doc heading should state it is pinned to main for dev builds")
+	// Docs are served from the docs site, not rate-limited raw GitHub.
+	if strings.Contains(content, "raw.githubusercontent.com") {
+		t.Errorf("AGENTS.md should not link raw GitHub:\n%s", content)
 	}
 }
 
@@ -136,20 +166,23 @@ func TestRenderedDocLinksExist(t *testing.T) {
 		t.Fatalf("Render returned error: %v", err)
 	}
 
-	docPathRe := regexp.MustCompile(`docs/content/[^)\s]+\.md`)
+	// Curated links point at published Markdown:
+	//   https://docs.kubara.io/<version>/<page>/index.md
+	// published from the source docs/content/<page>.md.
+	docURLRe := regexp.MustCompile(`docs\.kubara\.io/[^/]+/([^)\s]+)/index\.md`)
 	seen := map[string]bool{}
-	for _, match := range docPathRe.FindAllString(string(rendered), -1) {
-		seen[match] = true
+	for _, m := range docURLRe.FindAllStringSubmatch(string(rendered), -1) {
+		seen[m[1]] = true
 	}
 
 	if len(seen) == 0 {
-		t.Fatal("no docs/content links found in rendered template")
+		t.Fatal("no docs links found in rendered template")
 	}
 
-	for docPath := range seen {
-		full := filepath.Join(repoRoot, filepath.FromSlash(docPath))
+	for page := range seen {
+		full := filepath.Join(repoRoot, "docs", "content", filepath.FromSlash(page)+".md")
 		if _, err := os.Stat(full); err != nil {
-			t.Errorf("referenced doc does not exist: %s (%v)", docPath, err)
+			t.Errorf("referenced doc does not exist: docs/content/%s.md (%v)", page, err)
 		}
 	}
 }

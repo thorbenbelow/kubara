@@ -1,11 +1,12 @@
 // Package agentcontext renders and writes the coding-agent onboarding file
 // (AGENTS.md) into a kubara GitOps repository.
 //
-// The file gives AI coding agents (Claude Code, Codex, …) a compact,
-// version-pinned entry point into kubara: it delegates command and config
-// details to the self-describing CLI (`kubara --help`, `kubara schema`) and links
-// the raw Markdown documentation sources on GitHub for the installed binary
-// version, which is far cheaper for an agent to read than rendered HTML.
+// The file gives AI coding agents (Claude Code, Codex, …) a compact entry point
+// into kubara: it delegates command and config details to the self-describing
+// CLI (`kubara --help`, `kubara schema`) and links the published Markdown
+// documentation for the installed binary's version on the docs site, which is
+// far cheaper for an agent to read than rendered HTML and not rate-limited like
+// raw GitHub.
 package agentcontext
 
 import (
@@ -22,8 +23,6 @@ import (
 )
 
 const (
-	githubOwner = "kubara-io"
-	githubRepo  = "kubara"
 	docsSiteURL = "https://docs.kubara.io"
 
 	// AgentsFileName is the cross-agent onboarding file (read automatically by
@@ -35,13 +34,13 @@ const (
 var agentsTemplate string
 
 // releaseTagPattern matches a clean semver release tag (optionally prefixed with
-// "v"). Pre-release and snapshot versions deliberately do not match, so that raw
-// documentation links fall back to a ref that is guaranteed to resolve.
+// "v"). Pre-release and snapshot versions deliberately do not match, so that
+// documentation links fall back to a docs version that is guaranteed to resolve.
 var releaseTagPattern = regexp.MustCompile(`^v?\d+\.\d+\.\d+$`)
 
-// DocsRef resolves the git ref used to pin raw documentation links. Release builds
-// inject the git tag (e.g. "v0.10.0") via ldflags; anything else ("dev", empty or
-// snapshot builds) falls back to "main".
+// DocsRef resolves a clean release tag (e.g. "v0.10.0", normalised with a "v"
+// prefix) or "main" for dev/snapshot/empty builds. Release builds inject the git
+// tag via ldflags. It is the basis for DocsVersion.
 func DocsRef(version string) string {
 	v := strings.TrimSpace(version)
 	if !releaseTagPattern.MatchString(v) {
@@ -53,11 +52,22 @@ func DocsRef(version string) string {
 	return v
 }
 
+// DocsVersion resolves the hosted (mike) docs version segment used to link the
+// published llms.txt index. Release builds map to the git tag (vX.Y.Z, the
+// directory mike deploys under); everything else maps to the "latest-dev"
+// alias, since "main" is a git ref but not a published docs version.
+func DocsVersion(version string) string {
+	if ref := DocsRef(version); ref != "main" {
+		return ref
+	}
+	return "latest-dev"
+}
+
 type templateData struct {
 	Version  string
-	DocsRef  string
-	RawBase  string
 	DocsSite string
+	DocsBase string // docs site root for this version, e.g. https://docs.kubara.io/v0.10.0
+	LlmsTxt  string
 }
 
 func newTemplateData(version string) templateData {
@@ -65,12 +75,12 @@ func newTemplateData(version string) templateData {
 	if display == "" {
 		display = "dev"
 	}
-	ref := DocsRef(version)
+	docsBase := fmt.Sprintf("%s/%s", docsSiteURL, DocsVersion(version))
 	return templateData{
 		Version:  display,
-		DocsRef:  ref,
-		RawBase:  fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s", githubOwner, githubRepo, ref),
 		DocsSite: docsSiteURL,
+		DocsBase: docsBase,
+		LlmsTxt:  docsBase + "/llms.txt",
 	}
 }
 
