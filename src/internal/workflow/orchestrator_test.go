@@ -44,7 +44,6 @@ func TestCreateOrUpdateClusterFromEnv_UpdatesExistingClusterIncludingHelmRepo(t 
 	e := &envconfig.EnvMap{
 		ProjectName:       "kubara-test",
 		ProjectStage:      "dev",
-		DomainName:        "example.com",
 		ArgocdGitHttpsUrl: "https://github.com/new/repo.git",
 		ArgocdHelmRepoUrl: "https://charts.example.com",
 	}
@@ -55,8 +54,8 @@ func TestCreateOrUpdateClusterFromEnv_UpdatesExistingClusterIncludingHelmRepo(t 
 	require.Len(t, cfg.Clusters, 1)
 	updated := cfg.Clusters[0]
 	assert.Equal(t, "dev", updated.Stage)
-	assert.Equal(t, "kubara-test-dev.example.com", updated.DNSName)
-	assert.Equal(t, "kubara-test-dev.example.com", updated.Terraform.DNS.Name)
+	assert.Equal(t, "kubara-test-stage.example.com", updated.DNSName)
+	assert.Equal(t, "kubara-test-stage.example.com", updated.Terraform.DNS.Name)
 	assert.Equal(t, "https://github.com/new/repo.git", updated.ArgoCD.Repo.HTTPS.Managed.URL)
 	assert.Equal(t, "https://github.com/new/repo.git", updated.ArgoCD.Repo.HTTPS.Customer.URL)
 	require.NotNil(t, updated.ArgoCD.HelmRepo)
@@ -91,7 +90,6 @@ func TestCreateOrUpdateClusterFromEnv_UpdatesExistingClusterWithoutTerraform(t *
 	e := &envconfig.EnvMap{
 		ProjectName:       "kubara-test",
 		ProjectStage:      "dev",
-		DomainName:        "example.com",
 		ArgocdGitHttpsUrl: "https://github.com/new/repo.git",
 	}
 
@@ -101,7 +99,7 @@ func TestCreateOrUpdateClusterFromEnv_UpdatesExistingClusterWithoutTerraform(t *
 	require.Len(t, cfg.Clusters, 1)
 	updated := cfg.Clusters[0]
 	assert.Equal(t, "dev", updated.Stage)
-	assert.Equal(t, "kubara-test-dev.example.com", updated.DNSName)
+	assert.Equal(t, "kubara-test-stage.example.com", updated.DNSName)
 	assert.Nil(t, updated.Terraform)
 	assert.Equal(t, "https://github.com/new/repo.git", updated.ArgoCD.Repo.HTTPS.Managed.URL)
 	assert.Equal(t, "https://github.com/new/repo.git", updated.ArgoCD.Repo.HTTPS.Customer.URL)
@@ -112,7 +110,6 @@ func TestCreateOrUpdateClusterFromEnv_CreatesNewClusterWithHelmRepo(t *testing.T
 	e := &envconfig.EnvMap{
 		ProjectName:       "kubara-test",
 		ProjectStage:      "dev",
-		DomainName:        "example.com",
 		ArgocdGitHttpsUrl: "https://github.com/new/repo.git",
 		ArgocdHelmRepoUrl: "https://charts.example.com",
 	}
@@ -163,7 +160,6 @@ func TestCreateOrUpdateClusterFromEnv_DoesNotOverrideHelmRepoWhenEnvMissing(t *t
 	e := &envconfig.EnvMap{
 		ProjectName:       "kubara-test",
 		ProjectStage:      "dev",
-		DomainName:        "example.com",
 		ArgocdGitHttpsUrl: "https://github.com/new/repo.git",
 	}
 
@@ -181,7 +177,6 @@ func TestCreateOrUpdateClusterFromEnv_CreatesNewClusterWithoutHelmRepoWhenEnvMis
 	e := &envconfig.EnvMap{
 		ProjectName:       "kubara-test",
 		ProjectStage:      "dev",
-		DomainName:        "example.com",
 		ArgocdGitHttpsUrl: "https://github.com/new/repo.git",
 	}
 
@@ -198,7 +193,6 @@ func TestCreateOrUpdateClusterFromEnv_NormalizesOCIHelmRepoURL(t *testing.T) {
 	e := &envconfig.EnvMap{
 		ProjectName:       "kubara-test",
 		ProjectStage:      "dev",
-		DomainName:        "example.com",
 		ArgocdGitHttpsUrl: "https://github.com/new/repo.git",
 		ArgocdHelmRepoUrl: "oci://registry-1.docker.io/bitnamicharts",
 	}
@@ -217,7 +211,6 @@ func TestCreateOrUpdateClusterFromEnvWithCatalog_ReturnsErrorWhenCatalogLoadFail
 	e := &envconfig.EnvMap{
 		ProjectName:       "kubara-test",
 		ProjectStage:      "dev",
-		DomainName:        "example.com",
 		ArgocdGitHttpsUrl: "https://github.com/new/repo.git",
 	}
 

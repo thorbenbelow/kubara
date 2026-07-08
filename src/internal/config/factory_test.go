@@ -18,27 +18,24 @@ func TestNewClusterFromEnv(t *testing.T) {
 	sampleEnvMap := &envconfig.EnvMap{
 		ProjectName:       "kubara-test",
 		ProjectStage:      "dev",
-		DomainName:        "example.com",
 		ArgocdGitHttpsUrl: "https://github.com/org/repo.git",
 		ArgocdHelmRepoUrl: "https://charts.example.com",
 	}
 	sampleEnvMapWithoutHelmRepo := &envconfig.EnvMap{
 		ProjectName:       "kubara-test",
 		ProjectStage:      "dev",
-		DomainName:        "example.com",
 		ArgocdGitHttpsUrl: "https://github.com/org/repo.git",
 	}
 	sampleEnvMapWithOCIHelmRepo := &envconfig.EnvMap{
 		ProjectName:       "kubara-test",
 		ProjectStage:      "dev",
-		DomainName:        "example.com",
 		ArgocdGitHttpsUrl: "https://github.com/org/repo.git",
 		ArgocdHelmRepoUrl: "oci://registry-1.docker.io/bitnamicharts",
 	}
 
 	// 2. Manually construct the expected Cluster struct based on the sampleEnvMap.
 	// This is what we expect the function to return.
-	expectedDNSName := "kubara-test-dev.example.com"
+	expectedDNSName := "<subdomain.my-domain.com>"
 	expectedCluster := Cluster{
 		Name:             "kubara-test",
 		Stage:            "dev",
@@ -162,7 +159,6 @@ func TestNewClusterFromEnvWithCatalog_ReturnsErrorWhenCatalogLoadFails(t *testin
 	sampleEnvMap := &envconfig.EnvMap{
 		ProjectName:       "kubara-test",
 		ProjectStage:      "dev",
-		DomainName:        "example.com",
 		ArgocdGitHttpsUrl: "https://github.com/org/repo.git",
 	}
 
