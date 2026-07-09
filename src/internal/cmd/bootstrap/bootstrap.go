@@ -3,8 +3,8 @@ package bootstrap
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/kubara-io/kubara/internal/catalog"
@@ -25,24 +25,24 @@ const (
 
 // Options for bootstrap operations
 type Options struct {
-	Kubeconfig       string
-	ManagedCatalog   string
-	OverlayValues    string
-	WithES           bool
-	WithProm         bool
-	Local            bool
-	WithESCSSPath    string
-	EnvMap           *envconfig.EnvMap
-	Catalog          catalog.Catalog
-	ClusterConfig    *config.Cluster
-	DryRun           bool
-	Timeout          time.Duration
-	ClusterName      string
-	WorkDir          string
-	ConfigFilePath   string
-	CatalogPath      string
-	CatalogOverwrite bool
-	LocalState       *LocalState
+	Kubeconfig         string
+	PlatformComponents string
+	PlatformConfigs    string
+	WithES             bool
+	WithProm           bool
+	Local              bool
+	WithESCSSPath      string
+	EnvMap             *envconfig.EnvMap
+	Catalog            catalog.Catalog
+	ClusterConfig      *config.Cluster
+	DryRun             bool
+	Timeout            time.Duration
+	ClusterName        string
+	WorkDir            string
+	ConfigFilePath     string
+	CatalogPath        string
+	CatalogOverwrite   bool
+	LocalState         *LocalState
 }
 
 type BootstrapChart struct {
@@ -127,7 +127,7 @@ func Bootstrap(ctx context.Context, opts *Options) error {
 		{
 			Name:            "argocd",
 			Namespace:       argocdNamespace,
-			Path:            filepath.Join(opts.ManagedCatalog, "helm", argocdChartPath),
+			Path:            filepath.Join(opts.PlatformComponents, "helm", argocdChartPath),
 			OverlayValues:   overlayValuesForChart(opts, argocdChartPath),
 			RepoURL:         "https://argoproj.github.io/argo-helm",
 			Enabled:         true,
@@ -137,7 +137,7 @@ func Bootstrap(ctx context.Context, opts *Options) error {
 		{
 			Name:            "external-secrets",
 			Namespace:       externalSecretsNamespace,
-			Path:            filepath.Join(opts.ManagedCatalog, "helm", externalSecretsChartPath),
+			Path:            filepath.Join(opts.PlatformComponents, "helm", externalSecretsChartPath),
 			OverlayValues:   overlayValuesForChart(opts, externalSecretsChartPath),
 			RepoURL:         "https://charts.external-secrets.io",
 			Enabled:         opts.WithES,
@@ -146,7 +146,7 @@ func Bootstrap(ctx context.Context, opts *Options) error {
 		},
 		{
 			Name:            "kube-prometheus-stack",
-			Path:            filepath.Join(opts.ManagedCatalog, "helm", prometheusChartPath),
+			Path:            filepath.Join(opts.PlatformComponents, "helm", prometheusChartPath),
 			OverlayValues:   overlayValuesForChart(opts, prometheusChartPath),
 			RepoURL:         "https://prometheus-community.github.io/helm-charts",
 			Enabled:         opts.WithProm,
@@ -220,14 +220,14 @@ func chartPathForService(cat catalog.Catalog, serviceName string) (string, error
 }
 
 func overlayValuesForChart(opts *Options, chartPath string) []string {
-	chartOverlayPath := filepath.Join(opts.OverlayValues, "helm", opts.ClusterName, chartPath)
-	valuesPaths := []string{filepath.Join(chartOverlayPath, "values.yaml")}
+	chartOverlayPath := filepath.Join(opts.PlatformConfigs, opts.ClusterName, "helm", chartPath)
+	valuesPaths := []string{filepath.Join(chartOverlayPath, "values.generated.yaml")}
 
-	additionalValuesPath := filepath.Join(chartOverlayPath, "additional-values.yaml")
-	if _, err := os.Stat(additionalValuesPath); err == nil {
-		valuesPaths = append(valuesPaths, additionalValuesPath)
+	extraValues, err := filepath.Glob(filepath.Join(chartOverlayPath, "values-*.yaml"))
+	if err == nil {
+		sort.Strings(extraValues)
+		valuesPaths = append(valuesPaths, extraValues...)
 	}
-
 	return valuesPaths
 }
 

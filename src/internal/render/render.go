@@ -26,10 +26,9 @@ const (
 )
 
 const (
-	tmplRoot                  string = "built-in"
-	DefaultManagedCatalogPath string = "managed-service-catalog"
-	DefaultOverlayValuesPath  string = "customer-service-catalog"
-	providerFolderName        string = "providers"
+	tmplRoot                      string = "built-in"
+	DefaultPlatformComponentsPath string = "platform-components"
+	DefaultPlatformConfigsPath    string = "platform-configs"
 )
 
 var templatesFSNew fs.FS = catalog.BuiltInFS()
@@ -160,7 +159,7 @@ func loadTemplateSources(options TemplateOptions) ([]templateSource, error) {
 }
 
 func sourceHasTemplateRoots(source templateSource) (bool, error) {
-	roots := []string{DefaultOverlayValuesPath, DefaultManagedCatalogPath}
+	roots := []string{DefaultPlatformConfigsPath, DefaultPlatformComponentsPath}
 	for _, root := range roots {
 		info, err := fs.Stat(source.fsys, root)
 		if err != nil {
@@ -239,8 +238,8 @@ func getTemplateFiles(options TemplateOptions) ([]templateFile, error) {
 			walkErr = fs.WalkDir(source.fsys, source.baseRoot, walkDirFunc)
 		default:
 			roots := []string{
-				joinTemplateRoot(source.baseRoot, DefaultOverlayValuesPath, options.Type.String()),
-				joinTemplateRoot(source.baseRoot, DefaultManagedCatalogPath, options.Type.String()),
+				joinTemplateRoot(source.baseRoot, DefaultPlatformConfigsPath, options.Type.String()),
+				joinTemplateRoot(source.baseRoot, DefaultPlatformComponentsPath, options.Type.String()),
 			}
 			for _, root := range roots {
 				if err := fs.WalkDir(source.fsys, root, walkDirFunc); err != nil {
@@ -268,33 +267,37 @@ func splitProviderPath(relPath string) (string, string, bool) {
 	normalized := filepath.ToSlash(relPath)
 	parts := strings.Split(normalized, "/")
 	for idx := 0; idx+1 < len(parts); idx++ {
-		if parts[idx] != providerFolderName {
-			continue
-		}
-
 		// Only treat this segment as a provider selector when it appears
 		// directly inside the Terraform template directory.
-		// This prevents stripping unrelated "providers/<x>" segments that
-		// may appear elsewhere in the path.
 		if idx == 0 || parts[idx-1] != Terraform.String() {
 			continue
 		}
 
-		provider := strings.ToLower(parts[idx+1])
+		provider := strings.ToLower(parts[idx])
 		if provider == "" {
-			return normalized, "", false
+			continue
 		}
 
-		stripped := append([]string{}, parts[:idx]...)
-		stripped = append(stripped, parts[idx+2:]...)
-		return strings.Join(stripped, "/"), provider, true
+		// Robustly check that we are strictly within the platform-configs root directory
+		// before stripping the provider segment.
+		if parts[0] == DefaultPlatformConfigsPath {
+			stripped := append([]string{}, parts[:idx]...)
+			stripped = append(stripped, parts[idx+1:]...)
+			return strings.Join(stripped, "/"), provider, true
+		}
+
+		// Under platform-components, we do NOT strip the provider segment from the path,
+		// but we still want to detect the provider name to filter out other providers' assets!
+		if parts[0] == DefaultPlatformComponentsPath {
+			return normalized, provider, true
+		}
 	}
 
 	return normalized, "", false
 }
 
 // StripProviderPath removes a Terraform provider selector segment from a
-// relative template path (e.g. ".../terraform/providers/stackit/...") if present.
+// relative template path (e.g. ".../terraform/stackit/...") if present.
 func StripProviderPath(relPath string) string {
 	stripped, _, _ := splitProviderPath(relPath)
 	return stripped

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/kubara-io/kubara/internal/catalog"
+	"github.com/kubara-io/kubara/internal/config/migrations"
 	"github.com/kubara-io/kubara/internal/service"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -23,14 +24,16 @@ import (
 
 // ConfigStore handles reading and writing configuration
 type ConfigStore struct {
+	cwd            string
 	filepath       string
 	config         *Config
 	catalog        *catalog.Catalog
 	catalogOptions catalog.LoadOptions
 }
 
-func NewConfigStoreWithCatalog(filePath string, catalogOptions catalog.LoadOptions) *ConfigStore {
+func NewConfigStore(cwd string, filePath string, catalogOptions catalog.LoadOptions) *ConfigStore {
 	return &ConfigStore{
+		cwd:            cwd,
 		filepath:       filePath,
 		config:         &Config{},
 		catalogOptions: catalogOptions,
@@ -49,7 +52,7 @@ func (cs *ConfigStore) Load() error {
 		return fmt.Errorf("parse YAML config: %w", err)
 	}
 
-	migrated, err := applyMigrations(raw)
+	migrated, err := migrations.Apply(cs.cwd, raw)
 	if err != nil {
 		return fmt.Errorf("migration of config failed: %w", err)
 	}
@@ -300,7 +303,7 @@ func (cs *ConfigStore) GetFilepath() string {
 // SaveToFile saves the configuration to a YAML file
 func (cs *ConfigStore) SaveToFile() error {
 	if strings.TrimSpace(cs.config.Version) == "" {
-		cs.config.Version = ConfigVersionV1Alpha1
+		cs.config.Version = ConfigVersionV1Alpha3
 	}
 
 	// Ensure directory exists
