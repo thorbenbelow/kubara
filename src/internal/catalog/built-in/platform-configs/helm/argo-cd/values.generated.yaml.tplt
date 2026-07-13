@@ -140,6 +140,8 @@ externalSecrets:
 {{- end -}}
 {{- $argocdIngressAnnotations = mergeOverwrite $argocdIngressAnnotations $argocdUserIngressAnnotations -}}
 
+{{- $reloaderStatus := dig "cluster" "services" "reloader" "status" "disabled" . -}}
+
 argo-cd:
   server:
     ingressGrpc:
@@ -190,6 +192,12 @@ argo-cd:
     revisionHistoryLimit: 5
     imagePullSecrets:
       - name: image-pull-secret
+    {{- if (eq $reloaderStatus "enabled") }}
+    statefulsetAnnotations:
+      reloader.stakater.com/auto: "true"
+    deploymentAnnotations:
+      reloader.stakater.com/auto: "true"
+    {{- end }}
   controller:
     metrics:
       enabled: true
